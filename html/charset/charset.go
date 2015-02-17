@@ -40,7 +40,19 @@ func DetermineEncoding(content []byte, contentType string) (e encoding.Encoding,
 	if len(content) > 1024 {
 		content = content[:1024]
 	}
+	return determineEncoding(content, contentType)
+}
 
+// DetermineEncoding determines the encoding of an HTML document by examining
+// up to the first N bytes of content and the declared Content-Type.
+func DetermineEncodingN(content []byte, contentType string, n int) (e encoding.Encoding, name string, certain bool) {
+	if len(content) > n {
+		content = content[:n]
+	}
+	return determineEncoding(content, contentType)
+}
+
+func determineEncoding(content []byte, contentType string) (e encoding.Encoding, name string, certain bool) {
 	for _, b := range boms {
 		if bytes.HasPrefix(content, b.bom) {
 			e, name = Lookup(b.enc)
@@ -93,7 +105,18 @@ func DetermineEncoding(content []byte, contentType string) (e encoding.Encoding,
 // NewReader returns an io.Reader that converts the content of r to UTF-8.
 // It calls DetermineEncoding to find out what r's encoding is.
 func NewReader(r io.Reader, contentType string) (io.Reader, error) {
-	preview := make([]byte, 1024)
+	return newReader(r, contentType, 1024)
+}
+
+// NewReaderN returns an io.Reader that converts the content of r to UTF-8.
+// Use first N bytes when looking up into content to charset detect.
+// It calls DetermineEncoding to find out what r's encoding is.
+func NewReaderN(r io.Reader, contentType string, n int) (io.Reader, error) {
+	return newReader(r, contentType, n)
+}
+
+func newReader(r io.Reader, contentType string, n int) (io.Reader, error) {
+	preview := make([]byte, n)
 	n, err := io.ReadFull(r, preview)
 	switch {
 	case err == io.ErrUnexpectedEOF:
@@ -105,7 +128,7 @@ func NewReader(r io.Reader, contentType string) (io.Reader, error) {
 		r = io.MultiReader(bytes.NewReader(preview), r)
 	}
 
-	if e, _, _ := DetermineEncoding(preview, contentType); e != encoding.Nop {
+	if e, _, _ := determineEncoding(preview, contentType); e != encoding.Nop {
 		r = transform.NewReader(r, e.NewDecoder())
 	}
 	return r, nil
