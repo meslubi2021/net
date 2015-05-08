@@ -274,40 +274,17 @@ func escapeCommentString(s string) string {
 	return buf.String()
 }
 
-const escapedChars = "&'<>\"\r"
+var htmlEscaper = strings.NewReplacer(
+	`&`, "&amp;",
+	`'`, "&#39;", // "&#39;" is shorter than "&apos;" and apos was not in HTML until HTML5.
+	`<`, "&lt;",
+	`>`, "&gt;",
+	`"`, "&#34;", // "&#34;" is shorter than "&quot;".
+	"\r", "&#13;",
+)
 
 func escape(w writer, s string) error {
-	i := strings.IndexAny(s, escapedChars)
-	for i != -1 {
-		if _, err := w.WriteString(s[:i]); err != nil {
-			return err
-		}
-		var esc string
-		switch s[i] {
-		case '&':
-			esc = "&amp;"
-		case '\'':
-			// "&#39;" is shorter than "&apos;" and apos was not in HTML until HTML5.
-			esc = "&#39;"
-		case '<':
-			esc = "&lt;"
-		case '>':
-			esc = "&gt;"
-		case '"':
-			// "&#34;" is shorter than "&quot;".
-			esc = "&#34;"
-		case '\r':
-			esc = "&#13;"
-		default:
-			panic("unrecognized escape character")
-		}
-		s = s[i+1:]
-		if _, err := w.WriteString(esc); err != nil {
-			return err
-		}
-		i = strings.IndexAny(s, escapedChars)
-	}
-	_, err := w.WriteString(s)
+	_, err := htmlEscaper.WriteString(w, s)
 	return err
 }
 
@@ -316,12 +293,7 @@ func escape(w writer, s string) error {
 // UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
 // always true.
 func EscapeString(s string) string {
-	if strings.IndexAny(s, escapedChars) == -1 {
-		return s
-	}
-	var buf bytes.Buffer
-	escape(&buf, s)
-	return buf.String()
+	return htmlEscaper.Replace(s)
 }
 
 // UnescapeString unescapes entities like "&lt;" to become "<". It unescapes a
@@ -330,10 +302,8 @@ func EscapeString(s string) string {
 // UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
 // always true.
 func UnescapeString(s string) string {
-	for _, c := range s {
-		if c == '&' {
-			return string(unescape([]byte(s), false))
-		}
+	if !strings.Contains(s, "&") {
+		return s
 	}
-	return s
+	return string(unescape([]byte(s), false))
 }
