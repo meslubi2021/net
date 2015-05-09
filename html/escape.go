@@ -135,14 +135,14 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 		break
 	}
 
-	entityName := string(s[1:i])
-	if entityName == "" {
+	entityName := s[1:i]
+	if len(entityName) == 0 {
 		// No-op.
 	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
 		// No-op.
-	} else if x := entity[entityName]; x != 0 {
+	} else if x := entity[string(entityName)]; x != 0 {
 		return dst + utf8.EncodeRune(b[dst:], x), src + i
-	} else if x := entity2[entityName]; x[0] != 0 {
+	} else if x := entity2[string(entityName)]; x[0] != 0 {
 		dst1 := dst + utf8.EncodeRune(b[dst:], x[0])
 		return dst1 + utf8.EncodeRune(b[dst1:], x[1]), src + i
 	} else if !attribute {
@@ -151,7 +151,7 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 			maxLen = longestEntityWithoutSemicolon
 		}
 		for j := maxLen; j > 1; j-- {
-			if x := entity[entityName[:j]]; x != 0 {
+			if x := entity[string(entityName[:j])]; x != 0 {
 				return dst + utf8.EncodeRune(b[dst:], x), src + j + 1
 			}
 		}
@@ -165,22 +165,30 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 // unescape unescapes b's entities in-place, so that "a&lt;b" becomes "a<b".
 // attribute should be true if parsing an attribute value.
 func unescape(b []byte, attribute bool) []byte {
-	for i, c := range b {
-		if c == '&' {
-			dst, src := unescapeEntity(b, i, i, attribute)
-			for src < len(b) {
-				c := b[src]
-				if c == '&' {
-					dst, src = unescapeEntity(b, dst, src, attribute)
-				} else {
-					b[dst] = c
-					dst, src = dst+1, src+1
-				}
-			}
-			return b[0:dst]
-		}
+	i := bytes.IndexByte(b, '&')
+
+	if i < 0 {
+		return b
 	}
-	return b
+
+	dst, src := unescapeEntity(b, i, i, attribute)
+	for len(b[src:]) > 0 {
+		if b[src] == '&' {
+			i = 0
+		} else {
+			i = bytes.IndexByte(b[src:], '&')
+		}
+		if i < 0 {
+			dst += copy(b[dst:], b[src:])
+			break
+		}
+
+		if i > 0 {
+			copy(b[dst:], b[src:src+i])
+		}
+		dst, src = unescapeEntity(b, dst+i, src+i, attribute)
+	}
+	return b[:dst]
 }
 
 // lower lower-cases the A-Z bytes in b in-place, so that "aBc" becomes "abc".
@@ -302,8 +310,29 @@ func EscapeString(s string) string {
 // UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
 // always true.
 func UnescapeString(s string) string {
-	if !strings.Contains(s, "&") {
+	i := strings.IndexByte(s, '&')
+
+	if i < 0 {
 		return s
 	}
-	return string(unescape([]byte(s), false))
+
+	b := []byte(s)
+	dst, src := unescapeEntity(b, i, i, false)
+	for len(s[src:]) > 0 {
+		if s[src] == '&' {
+			i = 0
+		} else {
+			i = strings.IndexByte(s[src:], '&')
+		}
+		if i < 0 {
+			dst += copy(b[dst:], s[src:])
+			break
+		}
+
+		if i > 0 {
+			copy(b[dst:], s[src:src+i])
+		}
+		dst, src = unescapeEntity(b, dst+i, src+i, false)
+	}
+	return string(b[:dst])
 }
