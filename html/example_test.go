@@ -9,8 +9,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-
-	"golang.org/x/net/html"
+	"github.com/achintya/net/html"
 )
 
 func ExampleParse() {
