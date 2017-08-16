@@ -562,7 +562,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request) (status
 	walkErr := walkFS(ctx, h.FileSystem, depth, reqPath, fi, walkFn)
 	closeErr := mw.close()
 	if walkErr != nil {
-		return http.StatusInternalServerError, walkErr
+		return 0, walkErr
 	}
 	if closeErr != nil {
 		return http.StatusInternalServerError, closeErr
