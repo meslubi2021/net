@@ -165,6 +165,7 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 // unescape unescapes b's entities in-place, so that "a&lt;b" becomes "a<b".
 // attribute should be true if parsing an attribute value.
 func unescape(b []byte, attribute bool) []byte {
+	populateMapsOnce.Do(populateMaps)
 	i := bytes.IndexByte(b, '&')
 
 	if i < 0 {
@@ -310,6 +311,7 @@ func EscapeString(s string) string {
 // UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
 // always true.
 func UnescapeString(s string) string {
+	populateMapsOnce.Do(populateMaps)
 	i := strings.IndexByte(s, '&')
 
 	if i < 0 {
