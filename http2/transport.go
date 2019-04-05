@@ -460,6 +460,9 @@ func (t *Transport) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		}
 		if err != nil {
 			t.vlogf("RoundTrip failure: %v", err)
+			if err == errRequestCanceled {
+				cc.closeIfIdle()
+			}
 			return nil, err
 		}
 		return res, nil
