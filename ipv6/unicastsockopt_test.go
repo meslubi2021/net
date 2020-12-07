@@ -10,16 +10,16 @@ import (
 	"testing"
 
 	"golang.org/x/net/internal/iana"
-	"golang.org/x/net/internal/nettest"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/net/nettest"
 )
 
 func TestConnUnicastSocketOptions(t *testing.T) {
 	switch runtime.GOOS {
-	case "js", "nacl", "plan9", "windows":
+	case "fuchsia", "hurd", "js", "nacl", "plan9", "windows":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
-	if !supportsIPv6 {
+	if !nettest.SupportsIPv6() {
 		t.Skip("ipv6 is not supported")
 	}
 
@@ -61,17 +61,17 @@ var packetConnUnicastSocketOptionTests = []struct {
 
 func TestPacketConnUnicastSocketOptions(t *testing.T) {
 	switch runtime.GOOS {
-	case "js", "nacl", "plan9", "windows":
+	case "fuchsia", "hurd", "js", "nacl", "plan9", "windows":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
-	if !supportsIPv6 {
+	if !nettest.SupportsIPv6() {
 		t.Skip("ipv6 is not supported")
 	}
 
-	m, ok := nettest.SupportsRawIPSocket()
+	ok := nettest.SupportsRawSocket()
 	for _, tt := range packetConnUnicastSocketOptionTests {
 		if tt.net == "ip6" && !ok {
-			t.Log(m)
+			t.Logf("not supported on %s/%s", runtime.GOOS, runtime.GOARCH)
 			continue
 		}
 		c, err := net.ListenPacket(tt.net+tt.proto, tt.addr)
@@ -92,10 +92,12 @@ type testIPv6UnicastConn interface {
 }
 
 func testUnicastSocketOptions(t *testing.T, c testIPv6UnicastConn) {
+	t.Helper()
+
 	tclass := iana.DiffServCS0 | iana.NotECNTransport
 	if err := c.SetTrafficClass(tclass); err != nil {
 		switch runtime.GOOS {
-		case "darwin": // older darwin kernels don't support IPV6_TCLASS option
+		case "darwin", "ios": // older darwin kernels don't support IPV6_TCLASS option
 			t.Logf("not supported on %s", runtime.GOOS)
 			goto next
 		}

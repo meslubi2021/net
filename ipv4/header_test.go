@@ -157,10 +157,21 @@ var headerLittleEndianTests = []headerTest{
 }
 
 func TestMarshalHeader(t *testing.T) {
+	for i, tt := range []struct {
+		h   *Header
+		err error
+	}{
+		{nil, errNilHeader},
+		{&Header{Len: HeaderLen - 1}, errHeaderTooShort},
+	} {
+		if _, err := tt.h.Marshal(); err != tt.err {
+			t.Errorf("#%d: got %v; want %v", i, err, tt.err)
+		}
+	}
+
 	if socket.NativeEndian != binary.LittleEndian {
 		t.Skip("no test for non-little endian machine yet")
 	}
-
 	for _, tt := range headerLittleEndianTests {
 		b, err := tt.Header.Marshal()
 		if err != nil {
@@ -168,7 +179,7 @@ func TestMarshalHeader(t *testing.T) {
 		}
 		var wh []byte
 		switch runtime.GOOS {
-		case "darwin", "dragonfly", "netbsd":
+		case "darwin", "ios", "dragonfly", "netbsd":
 			wh = tt.wireHeaderToTradBSDKernel
 		case "freebsd":
 			switch {
@@ -189,14 +200,34 @@ func TestMarshalHeader(t *testing.T) {
 }
 
 func TestParseHeader(t *testing.T) {
+	for i, tt := range []struct {
+		h   *Header
+		wh  []byte
+		err error
+	}{
+		{nil, nil, errNilHeader},
+		{&Header{}, nil, errNilHeader},
+		{&Header{}, make([]byte, HeaderLen-1), errHeaderTooShort},
+		{&Header{}, []byte{
+			0x46, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00,
+		}, errExtHeaderTooShort},
+	} {
+		if err := tt.h.Parse(tt.wh); err != tt.err {
+			t.Fatalf("#%d: got %v; want %v", i, err, tt.err)
+		}
+	}
+
 	if socket.NativeEndian != binary.LittleEndian {
 		t.Skip("no test for big endian machine yet")
 	}
-
 	for _, tt := range headerLittleEndianTests {
 		var wh []byte
 		switch runtime.GOOS {
-		case "darwin", "dragonfly", "netbsd":
+		case "darwin", "ios", "dragonfly", "netbsd":
 			wh = tt.wireHeaderFromTradBSDKernel
 		case "freebsd":
 			switch {
