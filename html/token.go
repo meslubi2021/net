@@ -1076,6 +1076,27 @@ func (z *Tokenizer) Raw() []byte {
 	return z.buf[z.raw.start:z.raw.end]
 }
 
+// RawTagAttrPosition returns the position of the next attribute in the buffer returned by Raw.
+// Calling Next, Token, Text, TagName or TagAttr may change the contents of the returned slice.
+//
+// The attributes in the buffer are not escaped or processed in any way.
+// This function can be used to substitute attributes, while preserving the original whitespace and layout
+func (z *Tokenizer) RawTagAttrPosition() (keyStart, keyEnd, valStart, valEnd int, moreAttr bool) {
+	if z.nAttrReturned < len(z.attr) {
+		switch z.tt {
+		case StartTagToken, SelfClosingTagToken:
+			x := z.attr[z.nAttrReturned]
+			z.nAttrReturned++
+			return x[0].start-z.raw.start,
+						 x[0].end-z.raw.start,
+			       x[1].start-z.raw.start,
+						 x[1].end-z.raw.start,
+						 z.nAttrReturned < len(z.attr)
+		}
+	}
+	return -1, -1, -1, -1, false
+}
+
 // convertNewlines converts "\r" and "\r\n" in s to "\n".
 // The conversion happens in place, but the resulting slice may be shorter.
 func convertNewlines(s []byte) []byte {
@@ -1153,17 +1174,13 @@ func (z *Tokenizer) TagName() (name []byte, hasAttr bool) {
 // attribute for the current tag token and whether there are more attributes.
 // The contents of the returned slices may change on the next call to Next.
 func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
-	if z.nAttrReturned < len(z.attr) {
-		switch z.tt {
-		case StartTagToken, SelfClosingTagToken:
-			x := z.attr[z.nAttrReturned]
-			z.nAttrReturned++
-			key = z.buf[x[0].start:x[0].end]
-			val = z.buf[x[1].start:x[1].end]
-			return lower(key), unescape(convertNewlines(val), true), z.nAttrReturned < len(z.attr)
-		}
+	keyStart, keyEnd, valStart, valEnd, moreAttr := z.RawTagAttrPosition()
+	if keyStart == -1 {
+		return nil, nil, false
 	}
-	return nil, nil, false
+	key = z.buf[z.raw.start+keyStart:z.raw.start+keyEnd]
+	val = z.buf[z.raw.start+valStart:z.raw.start+valEnd]
+	return lower(key), unescape(convertNewlines(val), true), moreAttr
 }
 
 // Token returns the current Token. The result's Data and Attr values remain
