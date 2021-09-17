@@ -2219,6 +2219,11 @@ func TestTransportRejectsConnHeaders(t *testing.T) {
 		},
 		{
 			key:   "Transfer-Encoding",
+			value: []string{"chunKed"}, // Kelvin sign
+			want:  "ERROR: http2: invalid Transfer-Encoding request header: [\"chunKed\"]",
+		},
+		{
+			key:   "Transfer-Encoding",
 			value: []string{"chunked", "other"},
 			want:  "ERROR: http2: invalid Transfer-Encoding request header: [\"chunked\" \"other\"]",
 		},
@@ -3276,7 +3281,8 @@ func TestClientConnPing(t *testing.T) {
 	defer st.Close()
 	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
 	defer tr.CloseIdleConnections()
-	cc, err := tr.dialClientConn(st.ts.Listener.Addr().String(), false)
+	ctx := context.Background()
+	cc, err := tr.dialClientConn(ctx, st.ts.Listener.Addr().String(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3818,6 +3824,51 @@ func TestTransportResponseDataBeforeHeaders(t *testing.T) {
 	ct.run()
 }
 
+func TestTransportRequestsLowServerLimit(t *testing.T) {
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+	}, optOnlyServer, func(s *Server) {
+		s.MaxConcurrentStreams = 1
+	})
+	defer st.Close()
+
+	var (
+		connCountMu sync.Mutex
+		connCount   int
+	)
+	tr := &Transport{
+		TLSClientConfig: tlsConfigInsecure,
+		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			connCountMu.Lock()
+			defer connCountMu.Unlock()
+			connCount++
+			return tls.Dial(network, addr, cfg)
+		},
+	}
+	defer tr.CloseIdleConnections()
+
+	const reqCount = 3
+	for i := 0; i < reqCount; i++ {
+		req, err := http.NewRequest("GET", st.ts.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := tr.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := res.StatusCode, 200; got != want {
+			t.Errorf("StatusCode = %v; want %v", got, want)
+		}
+		if res != nil && res.Body != nil {
+			res.Body.Close()
+		}
+	}
+
+	if connCount != 1 {
+		t.Errorf("created %v connections for %v requests, want 1", connCount, reqCount)
+	}
+}
+
 // tests Transport.StrictMaxConcurrentStreams
 func TestTransportRequestsStallAtServerLimit(t *testing.T) {
 	const maxConcurrent = 2
@@ -3899,7 +3950,8 @@ func TestTransportRequestsStallAtServerLimit(t *testing.T) {
 				if k >= maxConcurrent {
 					<-unblockClient
 				}
-				req, _ := http.NewRequest("GET", fmt.Sprintf("https://dummy.tld/%d", k), nil)
+				body := newStaticCloseChecker("")
+				req, _ := http.NewRequest("GET", fmt.Sprintf("https://dummy.tld/%d", k), body)
 				if k == maxConcurrent {
 					// This request will be canceled.
 					cancel := make(chan struct{})
@@ -3923,6 +3975,9 @@ func TestTransportRequestsStallAtServerLimit(t *testing.T) {
 						errs <- fmt.Errorf("Status = %v; want 204", resp.StatusCode)
 						return
 					}
+				}
+				if err := body.isClosed(); err != nil {
+					errs <- fmt.Errorf("RoundTrip(%d): %v", k, err)
 				}
 			}(k)
 		}
@@ -3984,6 +4039,7 @@ func TestTransportRequestsStallAtServerLimit(t *testing.T) {
 				if nreq == maxConcurrent+1 {
 					close(writeResp)
 				}
+			case *DataFrame:
 			default:
 				return fmt.Errorf("Unexpected client frame %v", f)
 			}
@@ -4278,7 +4334,8 @@ func testClientConnClose(t *testing.T, closeMode closeMode) {
 	defer st.Close()
 	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
 	defer tr.CloseIdleConnections()
-	cc, err := tr.dialClientConn(st.ts.Listener.Addr().String(), false)
+	ctx := context.Background()
+	cc, err := tr.dialClientConn(ctx, st.ts.Listener.Addr().String(), false)
 	req, err := http.NewRequest("GET", st.ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -4788,7 +4845,8 @@ func TestTransportRoundtripCloseOnWriteError(t *testing.T) {
 
 	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
 	defer tr.CloseIdleConnections()
-	cc, err := tr.dialClientConn(st.ts.Listener.Addr().String(), false)
+	ctx := context.Background()
+	cc, err := tr.dialClientConn(ctx, st.ts.Listener.Addr().String(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4890,4 +4948,182 @@ func TestTransportServerResetStreamAtHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
+}
+
+type closeChecker struct {
+	io.ReadCloser
+	closed chan struct{}
+}
+
+func newCloseChecker(r io.ReadCloser) *closeChecker {
+	return &closeChecker{r, make(chan struct{})}
+}
+
+func newStaticCloseChecker(body string) *closeChecker {
+	return newCloseChecker(io.NopCloser(strings.NewReader("body")))
+}
+
+func (rc *closeChecker) Read(b []byte) (n int, err error) {
+	select {
+	default:
+	case <-rc.closed:
+		panic("read from closed body")
+	}
+	return rc.ReadCloser.Read(b)
+}
+
+func (rc *closeChecker) Close() error {
+	close(rc.closed)
+	return rc.ReadCloser.Close()
+}
+
+func (rc *closeChecker) isClosed() error {
+	// The RoundTrip contract says that it will close the request body,
+	// but that it may do so in a separate goroutine. Wait a reasonable
+	// amount of time before concluding that the body isn't being closed.
+	timeout := time.Duration(10 * time.Second)
+	select {
+	case <-rc.closed:
+	case <-time.After(timeout):
+		return fmt.Errorf("body not closed after %v", timeout)
+	}
+	return nil
+}
+
+func TestTransportCloseRequestBody(t *testing.T) {
+	var statusCode int
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(statusCode)
+	}, optOnlyServer)
+	defer st.Close()
+
+	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
+	defer tr.CloseIdleConnections()
+	ctx := context.Background()
+	cc, err := tr.dialClientConn(ctx, st.ts.Listener.Addr().String(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, status := range []int{200, 401} {
+		t.Run(fmt.Sprintf("status=%d", status), func(t *testing.T) {
+			statusCode = status
+			pr, pw := io.Pipe()
+			body := newCloseChecker(pr)
+			req, err := http.NewRequest("PUT", "https://dummy.tld/", body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := cc.RoundTrip(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			pw.Close()
+			if err := body.isClosed(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// collectClientsConnPool is a ClientConnPool that wraps lower and
+// collects what calls were made on it.
+type collectClientsConnPool struct {
+	lower ClientConnPool
+
+	mu      sync.Mutex
+	getErrs int
+	got     []*ClientConn
+}
+
+func (p *collectClientsConnPool) GetClientConn(req *http.Request, addr string) (*ClientConn, error) {
+	cc, err := p.lower.GetClientConn(req, addr)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err != nil {
+		p.getErrs++
+		return nil, err
+	}
+	p.got = append(p.got, cc)
+	return cc, nil
+}
+
+func (p *collectClientsConnPool) MarkDead(cc *ClientConn) {
+	p.lower.MarkDead(cc)
+}
+
+func TestTransportRetriesOnStreamProtocolError(t *testing.T) {
+	ct := newClientTester(t)
+	pool := &collectClientsConnPool{
+		lower: &clientConnPool{t: ct.tr},
+	}
+	ct.tr.ConnPool = pool
+	done := make(chan struct{})
+	ct.client = func() error {
+		req, _ := http.NewRequest("GET", "https://dummy.tld/", nil)
+		res, err := ct.tr.RoundTrip(req)
+		const want = "only one dial allowed in test mode"
+		if got := fmt.Sprint(err); got != want {
+			t.Errorf("didn't dial again: got %#q; want %#q", got, want)
+		}
+		close(done)
+		ct.sc.Close()
+		if res != nil {
+			res.Body.Close()
+		}
+
+		pool.mu.Lock()
+		defer pool.mu.Unlock()
+		if pool.getErrs != 1 {
+			t.Errorf("pool get errors = %v; want 1", pool.getErrs)
+		}
+		if len(pool.got) == 1 {
+			cc := pool.got[0]
+			cc.mu.Lock()
+			if !cc.doNotReuse {
+				t.Error("ClientConn not marked doNotReuse")
+			}
+			cc.mu.Unlock()
+		} else {
+			t.Errorf("pool get success = %v; want 1", len(pool.got))
+		}
+		return nil
+	}
+	ct.server = func() error {
+		ct.greet()
+		var sentErr bool
+		for {
+			f, err := ct.fr.ReadFrame()
+			if err != nil {
+				select {
+				case <-done:
+					return nil
+				default:
+					return err
+				}
+			}
+			switch f := f.(type) {
+			case *WindowUpdateFrame, *SettingsFrame:
+			case *HeadersFrame:
+				if !sentErr {
+					sentErr = true
+					ct.fr.WriteRSTStream(f.StreamID, ErrCodeProtocol)
+					continue
+				}
+				var buf bytes.Buffer
+				enc := hpack.NewEncoder(&buf)
+				// send headers without Trailer header
+				enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
+				ct.fr.WriteHeaders(HeadersFrameParam{
+					StreamID:      f.StreamID,
+					EndHeaders:    true,
+					EndStream:     true,
+					BlockFragment: buf.Bytes(),
+				})
+			}
+		}
+		return nil
+	}
+	ct.run()
 }
