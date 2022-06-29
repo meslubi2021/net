@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build ignore
 // +build ignore
 
 // +godefs map struct_in_addr [4]byte /* in_addr */
@@ -51,24 +52,6 @@ const (
 )
 
 const (
-	sysIFF_UP          = C.IFF_UP
-	sysIFF_BROADCAST   = C.IFF_BROADCAST
-	sysIFF_DEBUG       = C.IFF_DEBUG
-	sysIFF_LOOPBACK    = C.IFF_LOOPBACK
-	sysIFF_POINTOPOINT = C.IFF_POINTOPOINT
-	sysIFF_NOTRAILERS  = C.IFF_NOTRAILERS
-	sysIFF_RUNNING     = C.IFF_RUNNING
-	sysIFF_NOARP       = C.IFF_NOARP
-	sysIFF_PROMISC     = C.IFF_PROMISC
-	sysIFF_ALLMULTI    = C.IFF_ALLMULTI
-	sysIFF_INTELLIGENT = C.IFF_INTELLIGENT
-	sysIFF_MULTICAST   = C.IFF_MULTICAST
-	sysIFF_MULTI_BCAST = C.IFF_MULTI_BCAST
-	sysIFF_UNNUMBERED  = C.IFF_UNNUMBERED
-	sysIFF_PRIVATE     = C.IFF_PRIVATE
-)
-
-const (
 	sizeofLifnum       = C.sizeof_struct_lifnum
 	sizeofLifreq       = C.sizeof_struct_lifreq
 	sizeofLifconf      = C.sizeof_struct_lifconf
@@ -82,9 +65,3 @@ type lifreq C.struct_lifreq
 type lifconf C.struct_lifconf
 
 type lifIfinfoReq C.struct_lif_ifinfo_req
-
-const (
-	sysIFT_IPV4 = C.IFT_IPV4
-	sysIFT_IPV6 = C.IFT_IPV6
-	sysIFT_6TO4 = C.IFT_6TO4
-)
