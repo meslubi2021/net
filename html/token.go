@@ -1076,6 +1076,12 @@ func (z *Tokenizer) Raw() []byte {
 	return z.buf[z.raw.start:z.raw.end]
 }
 
+// RawTagPosition returns the position of the tag in the byte stream.
+// Calling Next, Token, Text, TagName or TagAttr may change the contents of the returned slice.
+func (z *Tokenizer) RawTagPosition() (tagStart, tagEnd int) {
+	return z.raw.start, z.raw.end
+}
+
 // RawTagAttrPosition returns the position of the next attribute in the buffer returned by Raw.
 // Calling Next, Token, Text, TagName or TagAttr may change the contents of the returned slice.
 //
@@ -1087,11 +1093,11 @@ func (z *Tokenizer) RawTagAttrPosition() (keyStart, keyEnd, valStart, valEnd int
 		case StartTagToken, SelfClosingTagToken:
 			x := z.attr[z.nAttrReturned]
 			z.nAttrReturned++
-			return x[0].start-z.raw.start,
-						 x[0].end-z.raw.start,
-			       x[1].start-z.raw.start,
-						 x[1].end-z.raw.start,
-						 z.nAttrReturned < len(z.attr)
+			return x[0].start - z.raw.start,
+				x[0].end - z.raw.start,
+				x[1].start - z.raw.start,
+				x[1].end - z.raw.start,
+				z.nAttrReturned < len(z.attr)
 		}
 	}
 	return -1, -1, -1, -1, false
@@ -1178,8 +1184,8 @@ func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
 	if keyStart == -1 {
 		return nil, nil, false
 	}
-	key = z.buf[z.raw.start+keyStart:z.raw.start+keyEnd]
-	val = z.buf[z.raw.start+valStart:z.raw.start+valEnd]
+	key = z.buf[z.raw.start+keyStart : z.raw.start+keyEnd]
+	val = z.buf[z.raw.start+valStart : z.raw.start+valEnd]
 	return lower(key), unescape(convertNewlines(val), true), moreAttr
 }
 
