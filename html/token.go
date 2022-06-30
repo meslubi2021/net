@@ -1021,6 +1021,9 @@ loop:
 			z.tt = z.readStartTag()
 			return z.tt
 		case EndTagToken:
+			if z.skipWhiteSpace(); z.err != nil {
+				break loop
+			}
 			c = z.readByte()
 			if z.err != nil {
 				break loop
