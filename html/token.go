@@ -1179,17 +1179,22 @@ func (z *Tokenizer) TagName() (name []byte, hasAttr bool) {
 	return nil, false
 }
 
+func (z *Tokenizer) TagAttrAndPosition() (keyStart, keyEnd, valStart, valEnd int, key, val []byte, moreAttr bool) {
+	keyStart, keyEnd, valStart, valEnd, moreAttr = z.RawTagAttrPosition()
+	if keyStart == -1 {
+		return keyStart, keyEnd, valStart, valEnd, nil, nil, false
+	}
+	key = z.buf[z.raw.start+keyStart : z.raw.start+keyEnd]
+	val = z.buf[z.raw.start+valStart : z.raw.start+valEnd]
+	return keyStart, keyEnd, valStart, valEnd, lower(key), unescape(convertNewlines(val), true), moreAttr
+}
+
 // TagAttr returns the lower-cased key and unescaped value of the next unparsed
 // attribute for the current tag token and whether there are more attributes.
 // The contents of the returned slices may change on the next call to Next.
 func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
-	keyStart, keyEnd, valStart, valEnd, moreAttr := z.RawTagAttrPosition()
-	if keyStart == -1 {
-		return nil, nil, false
-	}
-	key = z.buf[z.raw.start+keyStart : z.raw.start+keyEnd]
-	val = z.buf[z.raw.start+valStart : z.raw.start+valEnd]
-	return lower(key), unescape(convertNewlines(val), true), moreAttr
+	_, _, _, _, key, val, moreAttr = z.TagAttrAndPosition()
+	return key, val, moreAttr
 }
 
 // Token returns the current Token. The result's Data and Attr values remain
@@ -1247,4 +1252,12 @@ func NewTokenizerFragment(r io.Reader, contextTag string) *Tokenizer {
 		}
 	}
 	return z
+}
+
+// Creates a tokenizer from the byte string containing HTML
+func NewTokenizerFromBytes(htmlBytes []byte) *Tokenizer {
+	return &Tokenizer{
+		r:   bytes.NewReader(nil),
+		buf: append([]byte(nil), htmlBytes...),
+	}
 }
