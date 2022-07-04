@@ -1079,9 +1079,9 @@ func (z *Tokenizer) Raw() []byte {
 	return z.buf[z.raw.start:z.raw.end]
 }
 
-// RawTagPosition returns the position of the tag in the byte stream.
+// RawTokenPosition returns the position of the tag in the byte stream.
 // Calling Next, Token, Text, TagName or TagAttr may change the contents of the returned slice.
-func (z *Tokenizer) RawTagPosition() (tagStart, tagEnd int) {
+func (z *Tokenizer) RawTokenPosition() (tagStart, tagEnd int) {
 	return z.raw.start, z.raw.end
 }
 
