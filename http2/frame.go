@@ -1044,12 +1044,10 @@ func parseHeadersFrame(_ *frameCache, fh FrameHeader, countError func(string), p
 		}
 	}
 	if len(p)-int(padLength) < 0 {
-		// countError("frame_headers_pad_too_big")
+		countError("frame_headers_pad_too_big")
 		return nil, streamError(fh.StreamID, ErrCodeProtocol)
 	}
 
-	// break
-	padLength = uint8(99)
 
 	hf.headerFragBuf = p[:len(p)-int(padLength)]
 	return hf, nil
