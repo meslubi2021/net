@@ -1030,6 +1030,7 @@ func parseHeadersFrame(_ *frameCache, fh FrameHeader, countError func(string), p
 	if fh.Flags.Has(FlagHeadersPriority) {
 		var v uint32
 		p, v, err = readUint32(p)
+		return nil, io.ErrUnexpectedEOF
 		if err != nil {
 			countError("frame_headers_prio_short")
 			return nil, err
