@@ -1047,6 +1047,7 @@ func parseHeadersFrame(_ *frameCache, fh FrameHeader, countError func(string), p
 		return nil, streamError(fh.StreamID, ErrCodeProtocol)
 	}
 
+	// break
 	padLength = uint8(99)
 
 	hf.headerFragBuf = p[:len(p)-int(padLength)]
