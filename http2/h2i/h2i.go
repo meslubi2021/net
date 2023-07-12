@@ -46,6 +46,7 @@ import (
 var (
 	flagNextProto = flag.String("nextproto", "h2,h2-14", "Comma-separated list of NPN/ALPN protocol names to negotiate.")
 	flagInsecure  = flag.Bool("insecure", false, "Whether to skip TLS cert validation")
+	flagCleartext = flag.Bool("cleartext", false, "Whether to run over cleartext TCP")
 	flagSettings  = flag.String("settings", "empty", "comma-separated list of KEY=value settings for the initial SETTINGS frame. The magic value 'empty' sends an empty initial settings frame, and the magic value 'omit' causes no initial settings frame to be sent.")
 	flagDial      = flag.String("dial", "", "optional ip:port to dial, to connect to a host:port but use a different SNI name (including a SNI name without DNS)")
 )
@@ -102,7 +103,6 @@ func withoutPort(addr string) string {
 // h2i is the app's state.
 type h2i struct {
 	host   string
-	tc     *tls.Conn
 	framer *http2.Framer
 	term   *term.Terminal
 
@@ -155,32 +155,45 @@ func (app *h2i) Main() error {
 		hostAndPort = withPort(app.host)
 	}
 	log.Printf("Connecting to %s ...", hostAndPort)
-	tc, err := tls.Dial("tcp", hostAndPort, cfg)
-	if err != nil {
-		return fmt.Errorf("Error dialing %s: %v", hostAndPort, err)
-	}
-	log.Printf("Connected to %v", tc.RemoteAddr())
-	defer tc.Close()
 
-	if err := tc.Handshake(); err != nil {
-		return fmt.Errorf("TLS handshake: %v", err)
-	}
-	if !*flagInsecure {
-		if err := tc.VerifyHostname(app.host); err != nil {
-			return fmt.Errorf("VerifyHostname: %v", err)
+	var conn net.Conn
+	if !*flagCleartext {
+		tc, err := tls.Dial("tcp", hostAndPort, cfg)
+		if err != nil {
+			return fmt.Errorf("Error dialing %s: %v", hostAndPort, err)
 		}
-	}
-	state := tc.ConnectionState()
-	log.Printf("Negotiated protocol %q", state.NegotiatedProtocol)
-	if !state.NegotiatedProtocolIsMutual || state.NegotiatedProtocol == "" {
-		return fmt.Errorf("Could not negotiate protocol mutually")
+		log.Printf("Connected to %v", tc.RemoteAddr())
+		defer tc.Close()
+
+		if err := tc.Handshake(); err != nil {
+			return fmt.Errorf("TLS handshake: %v", err)
+		}
+		if !*flagInsecure {
+			if err := tc.VerifyHostname(app.host); err != nil {
+				return fmt.Errorf("VerifyHostname: %v", err)
+			}
+		}
+		state := tc.ConnectionState()
+		log.Printf("Negotiated protocol %q", state.NegotiatedProtocol)
+		if !state.NegotiatedProtocolIsMutual || state.NegotiatedProtocol == "" {
+			return fmt.Errorf("Could not negotiate protocol mutually")
+		}
+		conn = tc
+	} else {
+		tc, err := net.Dial("tcp", hostAndPort)
+		if err != nil {
+			return fmt.Errorf("Error dialing %s: %v", hostAndPort, err)
+		}
+		log.Printf("Connected to %v", tc.RemoteAddr())
+		defer tc.Close()
+		conn = tc
 	}
 
-	if _, err := io.WriteString(tc, http2.ClientPreface); err != nil {
+	if _, err := io.WriteString(conn, http2.ClientPreface); err != nil {
 		return err
 	}
 
-	app.framer = http2.NewFramer(tc, tc)
+	app.framer = http2.NewFramer(conn, conn)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
