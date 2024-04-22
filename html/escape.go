@@ -54,10 +54,15 @@ var replacementTable = [...]rune{
 // writes the corresponding "<" to dst[dstPos:], returning dst and the
 // incremented dstPos and srcPos cursors.
 //
-// Precondition: src[srcPos] == '&' && dstPost <= srcPos.
+// Usually, the returned dst is the dst argument, but in the event
+// that dstPos>srcPos it may be a copy.
+//
+// Precondition: src[srcPos] == '&'.
 //
 // attribute should be true if parsing an attribute value.
 func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, attribute bool) (dst1 []byte, dstPos1, srcPos1 int) {
+	var dstIsSrc = len(dst) == len(src)
+
 	// https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
 
 	// i starts at 1 because we already know that s[0] == '&'.
@@ -157,6 +162,17 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 	} else if x := entity[string(entityName)]; x != 0 {
 		return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + i
 	} else if x := entity2[string(entityName)]; x[0] != 0 {
+		dstPos1 := dstPos + utf8.EncodeRune(dst[dstPos:], x[0])
+		return dst, dstPos1 + utf8.EncodeRune(dst[dstPos1:], x[1]), srcPos + i
+	} else if x := entityWide[string(entityName)]; x[0] != 0 {
+		// 5 bytes in, 6 bytes out
+		if dstPos == srcPos && dstIsSrc {
+			// make a copy + grow
+			dst = append(dst[:len(dst):len(dst)], 0)
+		}  else if dstPos+6 >= len(dst) {
+			// grow, but don't necessarily make a copy
+			dst = append(dst, 0)
+		}
 		dstPos1 := dstPos + utf8.EncodeRune(dst[dstPos:], x[0])
 		return dst, dstPos1 + utf8.EncodeRune(dst[dstPos1:], x[1]), srcPos + i
 	} else if !attribute {
@@ -332,7 +348,8 @@ func UnescapeString(s string) string {
 		return s
 	}
 
-	b := make([]byte, len(s))
+	// The +1 is just so that dstIsSrc=false.
+	b := make([]byte, len(s)+1)
 	copy(b, s[:i])
 	b, dst, src := unescapeEntity(b, s, i, i, false)
 	for len(s[src:]) > 0 {

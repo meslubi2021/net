@@ -17,8 +17,12 @@ const longestEntityWithoutSemicolon = 6
 // https://www.w3.org/TR/html4/sgml/entities.html
 var entity map[string]rune
 
-// HTML entities that are two unicode codepoints.
+// HTML entities that are two unicode codepoints, and are not
+// mentioned in entityWide.
 var entity2 map[string][2]rune
+
+// HTML entities that have replacements wider than their names.
+var entityWide map[string][2]rune
 
 // populateMapsOnce guards calling populateMaps.
 var populateMapsOnce sync.Once
@@ -2167,9 +2171,6 @@ func populateMaps() {
 	}
 
 	entity2 = map[string][2]rune{
-		// TODO(nigeltao): Handle replacements that are wider than their names.
-		// "nLt;":                     {'\u226A', '\u20D2'},
-		// "nGt;":                     {'\u226B', '\u20D2'},
 		"NotEqualTilde;":           {'\u2242', '\u0338'},
 		"NotGreaterFullEqual;":     {'\u2267', '\u0338'},
 		"NotGreaterGreater;":       {'\u226B', '\u0338'},
@@ -2261,5 +2262,10 @@ func populateMaps() {
 		"vsubne;":                  {'\u228A', '\uFE00'},
 		"vsupnE;":                  {'\u2ACC', '\uFE00'},
 		"vsupne;":                  {'\u228B', '\uFE00'},
+	}
+
+	entityWide = map[string][2]rune{
+		"nLt;": {'\u226A', '\u20D2'},
+		"nGt;": {'\u226B', '\u20D2'},
 	}
 }

@@ -99,6 +99,12 @@ var unescapeTests = []unescapeTest{
 		"&#x10061; &#x100000061; &#x10000000000000061;",
 		"\U00010061 \ufffd \ufffd",
 	},
+	// Handle replacements that are wider than their names.
+	{
+		"wideReplacements",
+		"&nLt; &nGt;",
+		"\u226A\u20D2 \u226B\u20D2",
+	},
 }
 
 func TestUnescape(t *testing.T) {

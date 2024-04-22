@@ -14,7 +14,7 @@ func init() {
 }
 
 func TestEntityLength(t *testing.T) {
-	if len(entity) == 0 || len(entity2) == 0 {
+	if len(entity) == 0 || len(entity2) == 0 || len(entityWide) == 0 {
 		t.Fatal("maps not loaded")
 	}
 
@@ -32,6 +32,11 @@ func TestEntityLength(t *testing.T) {
 	for k, v := range entity2 {
 		if 1+len(k) < utf8.RuneLen(v[0])+utf8.RuneLen(v[1]) {
 			t.Error("escaped entity &" + k + " is shorter than its UTF-8 encoding " + string(v[0]) + string(v[1]))
+		}
+	}
+	for k, v := range entityWide {
+		if 1+len(k) >= utf8.RuneLen(v[0])+utf8.RuneLen(v[1]) {
+			t.Error("escaped entity &" + k + " is not shorter than its UTF-8 encoding " + string(v[0]) + string(v[1]))
 		}
 	}
 }
