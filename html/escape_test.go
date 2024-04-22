@@ -85,6 +85,12 @@ var unescapeTests = []unescapeTest{
 		"text &#",
 		"text &#",
 	},
+	// Handle single-digit decimal values without a semicolon.
+	{
+		"singleDecimal",
+		"&#0 text &#1",
+		"\ufffd text \x01",
+	},
 }
 
 func TestUnescape(t *testing.T) {
