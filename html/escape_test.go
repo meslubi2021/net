@@ -91,6 +91,14 @@ var unescapeTests = []unescapeTest{
 		"&#0 text &#1",
 		"\ufffd text \x01",
 	},
+	// Handle integer overflow.
+	{
+		"integerOverflow",
+		// These values overflow (u)int16, (u)int32, and
+		// (u)int64, respectively, to be "a".
+		"&#x10061; &#x100000061; &#x10000000000000061;",
+		"\U00010061 \ufffd \ufffd",
+	},
 }
 
 func TestUnescape(t *testing.T) {

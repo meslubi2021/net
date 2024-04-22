@@ -79,9 +79,17 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 		}
 
 		x := '\x00'
+		overflowed := false
 		for i < len(s) {
 			c = s[i]
 			i++
+			if x > 0x10FFFF {
+				// Make a note that we're above the maximum
+				// value, in case later we overflow the integer.
+				// Don't `break` though, we still want to
+				// consume the characters.
+				overflowed = true
+			}
 			if hex {
 				if '0' <= c && c <= '9' {
 					x = 16*x + rune(c) - '0'
@@ -101,6 +109,9 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 				i--
 			}
 			break
+		}
+		if overflowed {
+			x = 0x110000
 		}
 
 		if i < 3 || (hex && i < 4) { // No characters matched.
