@@ -55,7 +55,7 @@ var replacementTable = [...]rune{
 // Precondition: b[src] == '&' && dst <= src.
 // attribute should be true if parsing an attribute value.
 func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
-	// https://html.spec.whatwg.org/multipage/syntax.html#consume-a-character-reference
+	// https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
 
 	// i starts at 1 because we already know that s[0] == '&'.
 	i, s := 1, b[src:]

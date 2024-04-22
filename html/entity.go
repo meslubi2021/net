@@ -14,7 +14,7 @@ const longestEntityWithoutSemicolon = 6
 // lists both "amp" and "amp;" as two separate entries.
 //
 // Note that the HTML5 list is larger than the HTML4 list at
-// http://www.w3.org/TR/html4/sgml/entities.html
+// https://www.w3.org/TR/html4/sgml/entities.html
 var entity map[string]rune
 
 // HTML entities that are two unicode codepoints.
