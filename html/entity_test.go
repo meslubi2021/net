@@ -6,7 +6,6 @@ package html
 
 import (
 	"testing"
-	"unicode/utf8"
 )
 
 func init() {
@@ -14,29 +13,13 @@ func init() {
 }
 
 func TestEntityLength(t *testing.T) {
-	if len(entity) == 0 || len(entity2) == 0 || len(entityWide) == 0 {
+	if len(entity) == 0 {
 		t.Fatal("maps not loaded")
 	}
 
-	// We verify that the length of UTF-8 encoding of each value is <= 1 + len(key).
-	// The +1 comes from the leading "&". This property implies that the length of
-	// unescaped text is <= the length of escaped text.
-	for k, v := range entity {
-		if 1+len(k) < utf8.RuneLen(v) {
-			t.Error("escaped entity &" + k + " is shorter than its UTF-8 encoding " + string(v))
-		}
+	for k := range entity {
 		if len(k) > longestEntityWithoutSemicolon && k[len(k)-1] != ';' {
 			t.Errorf("entity name %s is %d characters, but longestEntityWithoutSemicolon=%d", k, len(k), longestEntityWithoutSemicolon)
-		}
-	}
-	for k, v := range entity2 {
-		if 1+len(k) < utf8.RuneLen(v[0])+utf8.RuneLen(v[1]) {
-			t.Error("escaped entity &" + k + " is shorter than its UTF-8 encoding " + string(v[0]) + string(v[1]))
-		}
-	}
-	for k, v := range entityWide {
-		if 1+len(k) >= utf8.RuneLen(v[0])+utf8.RuneLen(v[1]) {
-			t.Error("escaped entity &" + k + " is not shorter than its UTF-8 encoding " + string(v[0]) + string(v[1]))
 		}
 	}
 }

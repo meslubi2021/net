@@ -157,30 +157,28 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 		// No-op.
 	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
 		// No-op.
-	} else if x := entity[string(entityName)]; x != 0 {
-		return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + i
-	} else if x := entity2[string(entityName)]; x[0] != 0 {
-		dstPos1 := dstPos + utf8.EncodeRune(dst[dstPos:], x[0])
-		return dst, dstPos1 + utf8.EncodeRune(dst[dstPos1:], x[1]), srcPos + i
-	} else if x := entityWide[string(entityName)]; x[0] != 0 {
-		// 5 bytes in, 6 bytes out
-		if dstPos == srcPos && dstIsSrc {
-			// make a copy + grow
-			dst = append(dst[:len(dst):len(dst)], 0)
-		}  else if dstPos+6 >= len(dst) {
-			// grow, but don't necessarily make a copy
-			dst = append(dst, 0)
+	} else if entityVal := entity[string(entityName)]; entityVal.Len != 0 {
+		if entityVal.Len > i {
+			// This assumes that it only ever has to grow by 1 byte per entity.
+			if dstPos == srcPos && dstIsSrc {
+				// make a copy + grow
+				dst = append(dst[:len(dst):len(dst)], 0)
+			} else if dstPos+entityVal.Len >= len(dst) {
+				// grow, but don't necessarily make a copy
+				dst = append(dst, 0)
+			}
 		}
-		dstPos1 := dstPos + utf8.EncodeRune(dst[dstPos:], x[0])
-		return dst, dstPos1 + utf8.EncodeRune(dst[dstPos1:], x[1]), srcPos + i
+		return dst, dstPos + copy(dst[dstPos:], entityVal.Val[:entityVal.Len]), srcPos + i
 	} else if !attribute {
 		maxLen := len(entityName) - 1
 		if maxLen > longestEntityWithoutSemicolon {
 			maxLen = longestEntityWithoutSemicolon
 		}
 		for j := maxLen; j > 1; j-- {
-			if x := entity[string(entityName[:j])]; x != 0 {
-				return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + j + 1
+			if entityVal := entity[string(entityName[:j])]; entityVal.Len != 0 {
+				// This assumes that no entity without a semicolon
+				// has a value that is wider than its name.
+				return dst, dstPos + copy(dst[dstPos:], entityVal.Val[:entityVal.Len]), srcPos + j + 1
 			}
 		}
 	}
@@ -193,7 +191,7 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 // unescape unescapes b's entities in-place, so that "a&lt;b" becomes "a<b".
 // attribute should be true if parsing an attribute value.
 func unescape(b []byte, attribute bool) []byte {
-	populateMapsOnce.Do(populateMaps)
+	populateMapOnce.Do(populateMap)
 	i := bytes.IndexByte(b, '&')
 
 	if i < 0 {
@@ -339,7 +337,7 @@ func EscapeString(s string) string {
 // UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
 // always true.
 func UnescapeString(s string) string {
-	populateMapsOnce.Do(populateMaps)
+	populateMapOnce.Do(populateMap)
 	i := strings.IndexByte(s, '&')
 
 	if i < 0 {
