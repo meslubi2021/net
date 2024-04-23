@@ -50,25 +50,28 @@ var replacementTable = [...]rune{
 	// 0x0D->'\u000D' is a no-op.
 }
 
-// unescapeEntity reads an entity like "&lt;" from b[src:] and writes the
-// corresponding "<" to b[dst:], returning the incremented dst and src cursors.
-// Precondition: b[src] == '&' && dst <= src.
+// unescapeEntity reads an entity like "&lt;" from src[srcPos:] and
+// writes the corresponding "<" to dst[dstPos:], returning dst and the
+// incremented dstPos and srcPos cursors.
+//
+// Precondition: src[srcPos] == '&' && dstPost <= srcPos.
+//
 // attribute should be true if parsing an attribute value.
-func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
+func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, attribute bool) (dst1 []byte, dstPos1, srcPos1 int) {
 	// https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
 
 	// i starts at 1 because we already know that s[0] == '&'.
-	i, s := 1, b[src:]
+	i, s := 1, src[srcPos:]
 
 	if len(s) <= 1 {
-		b[dst] = b[src]
-		return dst + 1, src + 1
+		dst[dstPos] = src[srcPos]
+		return dst, dstPos + 1, srcPos + 1
 	}
 
 	if s[i] == '#' {
 		if len(s) < 3 { // We need to have at least "&#.".
-			b[dst] = b[src]
-			return dst + 1, src + 1
+			dst[dstPos] = src[srcPos]
+			return dst, dstPos + 1, srcPos + 1
 		}
 		i++
 		c := s[i]
@@ -115,8 +118,8 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 		}
 
 		if i < 3 || (hex && i < 4) { // No characters matched.
-			b[dst] = b[src]
-			return dst + 1, src + 1
+			dst[dstPos] = src[srcPos]
+			return dst, dstPos + 1, srcPos + 1
 		}
 
 		if 0x80 <= x && x <= 0x9F {
@@ -127,7 +130,7 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 			x = '\uFFFD'
 		}
 
-		return dst + utf8.EncodeRune(b[dst:], x), src + i
+		return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + i
 	}
 
 	// Consume the maximum number of characters possible, with the
@@ -152,10 +155,10 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
 		// No-op.
 	} else if x := entity[string(entityName)]; x != 0 {
-		return dst + utf8.EncodeRune(b[dst:], x), src + i
+		return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + i
 	} else if x := entity2[string(entityName)]; x[0] != 0 {
-		dst1 := dst + utf8.EncodeRune(b[dst:], x[0])
-		return dst1 + utf8.EncodeRune(b[dst1:], x[1]), src + i
+		dstPos1 := dstPos + utf8.EncodeRune(dst[dstPos:], x[0])
+		return dst, dstPos1 + utf8.EncodeRune(dst[dstPos1:], x[1]), srcPos + i
 	} else if !attribute {
 		maxLen := len(entityName) - 1
 		if maxLen > longestEntityWithoutSemicolon {
@@ -163,14 +166,14 @@ func unescapeEntity(b []byte, dst, src int, attribute bool) (dst1, src1 int) {
 		}
 		for j := maxLen; j > 1; j-- {
 			if x := entity[string(entityName[:j])]; x != 0 {
-				return dst + utf8.EncodeRune(b[dst:], x), src + j + 1
+				return dst, dstPos + utf8.EncodeRune(dst[dstPos:], x), srcPos + j + 1
 			}
 		}
 	}
 
-	dst1, src1 = dst+i, src+i
-	copy(b[dst:dst1], b[src:src1])
-	return dst1, src1
+	dstPos1, srcPos1 = dstPos+i, srcPos+i
+	copy(dst[dstPos:dstPos1], src[srcPos:srcPos1])
+	return dst, dstPos1, srcPos1
 }
 
 // unescape unescapes b's entities in-place, so that "a&lt;b" becomes "a<b".
@@ -183,7 +186,7 @@ func unescape(b []byte, attribute bool) []byte {
 		return b
 	}
 
-	dst, src := unescapeEntity(b, i, i, attribute)
+	b1, dst, src := unescapeEntity(b, b, i, i, attribute)
 	for len(b[src:]) > 0 {
 		if b[src] == '&' {
 			i = 0
@@ -191,16 +194,16 @@ func unescape(b []byte, attribute bool) []byte {
 			i = bytes.IndexByte(b[src:], '&')
 		}
 		if i < 0 {
-			dst += copy(b[dst:], b[src:])
+			dst += copy(b1[dst:], b[src:])
 			break
 		}
 
 		if i > 0 {
-			copy(b[dst:], b[src:src+i])
+			copy(b1[dst:], b[src:src+i])
 		}
-		dst, src = unescapeEntity(b, dst+i, src+i, attribute)
+		b1, dst, src = unescapeEntity(b1, b, dst+i, src+i, attribute)
 	}
-	return b[:dst]
+	return b1[:dst]
 }
 
 // lower lower-cases the A-Z bytes in b in-place, so that "aBc" becomes "abc".
@@ -329,8 +332,9 @@ func UnescapeString(s string) string {
 		return s
 	}
 
-	b := []byte(s)
-	dst, src := unescapeEntity(b, i, i, false)
+	b := make([]byte, len(s))
+	copy(b, s[:i])
+	b, dst, src := unescapeEntity(b, s, i, i, false)
 	for len(s[src:]) > 0 {
 		if s[src] == '&' {
 			i = 0
@@ -345,7 +349,7 @@ func UnescapeString(s string) string {
 		if i > 0 {
 			copy(b[dst:], s[src:src+i])
 		}
-		dst, src = unescapeEntity(b, dst+i, src+i, false)
+		b, dst, src = unescapeEntity(b, s, dst+i, src+i, false)
 	}
 	return string(b[:dst])
 }
