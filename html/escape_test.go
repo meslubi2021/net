@@ -91,7 +91,11 @@ func TestUnescape(t *testing.T) {
 	for _, tt := range unescapeTests {
 		unescaped := UnescapeString(tt.html)
 		if unescaped != tt.unescaped {
-			t.Errorf("TestUnescape %s: want %q, got %q", tt.desc, tt.unescaped, unescaped)
+			t.Errorf("TestUnescape %s: string: want %q, got %q", tt.desc, tt.unescaped, unescaped)
+		}
+		unescaped = string(unescape([]byte(tt.html), false))
+		if unescaped != tt.unescaped {
+			t.Errorf("TestUnescape %s: bytes: want %q, got %q", tt.desc, tt.unescaped, unescaped)
 		}
 	}
 }

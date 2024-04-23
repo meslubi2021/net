@@ -13,10 +13,19 @@ func FuzzEscapeUnescape(f *testing.F) {
 		if u != v {
 			t.Errorf("EscapeString(%q) = %q, UnescapeString(%q) = %q, want %q", v, e, e, u, v)
 		}
+		u2 := string(unescape([]byte(e), false))
+		if u2 != u {
+			t.Errorf("UnescapeString(%q) = %q, unescape(%q, false) = %q", e, u, e, u2)
+		}
 
+		u = UnescapeString(v)
+		u2 = string(unescape([]byte(v), false))
+		if u2 != u {
+			t.Errorf("UnescapeString(%q) = %q, unescape(%q, false) = %q", v, u, v, u2)
+		}
 		// As per the documentation, this isn't always equal to v, so it makes
 		// no sense to check for equality. It can still be interesting to find
 		// panics in it though.
-		EscapeString(UnescapeString(v))
+		EscapeString(u)
 	})
 }
