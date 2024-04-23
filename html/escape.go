@@ -68,16 +68,14 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 	// i starts at 1 because we already know that s[0] == '&'.
 	i, s := 1, src[srcPos:]
 
-	if len(s) <= 1 {
+	// shortest possible entities are all 3 bytes:
+	// "&GT", "&LT", "&gt", "&lt", "&#0" ... "&#9"
+	if len(s) < 3 {
 		dst[dstPos] = src[srcPos]
 		return dst, dstPos + 1, srcPos + 1
 	}
 
 	if s[i] == '#' {
-		if len(s) < 3 { // We need to have at least "&#.".
-			dst[dstPos] = src[srcPos]
-			return dst, dstPos + 1, srcPos + 1
-		}
 		i++
 		c := s[i]
 		hex := false
@@ -308,7 +306,7 @@ func escapeCommentString(s string) string {
 	if strings.IndexAny(s, "&>") == -1 {
 		return s
 	}
-	var buf bytes.Buffer
+	var buf strings.Builder
 	escapeComment(&buf, s)
 	return buf.String()
 }
