@@ -18,12 +18,13 @@ const longestEntityWithoutSemicolon = 6
 var entity map[string]entityVal
 
 type entityVal struct {
-	Len int
+	// 8 bytes total, for good alignment
+	Len int16
 	Val [6]byte
 }
 
 func mkEntityVal(str string) (ret entityVal) {
-	ret.Len = copy(ret.Val[:], str)
+	ret.Len = int16(copy(ret.Val[:], str))
 	return ret
 }
 

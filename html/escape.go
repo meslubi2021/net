@@ -158,12 +158,12 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
 		// No-op.
 	} else if entityVal := entity[string(entityName)]; entityVal.Len != 0 {
-		if entityVal.Len > i {
+		if entityVal.Len > int16(i) {
 			// This assumes that it only ever has to grow by 1 byte per entity.
 			if dstPos == srcPos && dstIsSrc {
 				// make a copy + grow
 				dst = append(dst[:len(dst):len(dst)], 0)
-			} else if dstPos+entityVal.Len >= len(dst) {
+			} else if dstPos+int(entityVal.Len) >= len(dst) {
 				// grow, but don't necessarily make a copy
 				dst = append(dst, 0)
 			}
