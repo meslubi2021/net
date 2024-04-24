@@ -17,14 +17,13 @@ const longestEntityWithoutSemicolon = 6
 // https://www.w3.org/TR/html4/sgml/entities.html
 var entity map[string]entityVal
 
-type entityVal struct {
-	// 8 bytes total, for good alignment
-	Len int16
-	Val [6]byte
-}
+type entityVal [8]byte
 
 func mkEntityVal(str string) (ret entityVal) {
-	ret.Len = int16(copy(ret.Val[:], str))
+	ret[0] = byte(len(str))
+	if copy(ret[1:], str) < len(str) {
+		panic("entity value does not fit in buffer: "+str)
+	}
 	return ret
 }
 

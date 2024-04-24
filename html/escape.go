@@ -157,28 +157,28 @@ func unescapeEntity[S ~[]byte | string](dst []byte, src S, dstPos, srcPos int, a
 		// No-op.
 	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
 		// No-op.
-	} else if entityVal := entity[string(entityName)]; entityVal.Len != 0 {
-		if entityVal.Len > int16(i) {
+	} else if x := entity[string(entityName)]; x[0] != 0 {
+		if int(x[0]) > i {
 			// This assumes that it only ever has to grow by 1 byte per entity.
 			if dstPos == srcPos && dstIsSrc {
 				// make a copy + grow
 				dst = append(dst[:len(dst):len(dst)], 0)
-			} else if dstPos+int(entityVal.Len) >= len(dst) {
+			} else if dstPos+int(x[0]) >= len(dst) {
 				// grow, but don't necessarily make a copy
 				dst = append(dst, 0)
 			}
 		}
-		return dst, dstPos + copy(dst[dstPos:], entityVal.Val[:entityVal.Len]), srcPos + i
+		return dst, dstPos + copy(dst[dstPos:], x[1:1+x[0]]), srcPos + i
 	} else if !attribute {
 		maxLen := len(entityName) - 1
 		if maxLen > longestEntityWithoutSemicolon {
 			maxLen = longestEntityWithoutSemicolon
 		}
 		for j := maxLen; j > 1; j-- {
-			if entityVal := entity[string(entityName[:j])]; entityVal.Len != 0 {
+			if x := entity[string(entityName[:j])]; x[0] != 0 {
 				// This assumes that no entity without a semicolon
 				// has a value that is wider than its name.
-				return dst, dstPos + copy(dst[dstPos:], entityVal.Val[:entityVal.Len]), srcPos + j + 1
+				return dst, dstPos + copy(dst[dstPos:], x[1:1+x[0]]), srcPos + j + 1
 			}
 		}
 	}
