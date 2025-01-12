@@ -5856,7 +5856,7 @@ func TestTransportTLSNextProtoConnImmediateFailureUnused(t *testing.T) {
 }
 
 func TestExtendedConnectClientWithServerSupport(t *testing.T) {
-	disableExtendedConnectProtocol = false
+	setForTest(t, &disableExtendedConnectProtocol, false)
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(":protocol") != "extended-connect" {
 			t.Fatalf("unexpected :protocol header received")
@@ -5872,6 +5872,9 @@ func TestExtendedConnectClientWithServerSupport(t *testing.T) {
 	pwDone := make(chan struct{})
 	req, _ := http.NewRequest("CONNECT", ts.URL, pr)
 	req.Header.Set(":protocol", "extended-connect")
+	req.Header.Set("X-A", "A")
+	req.Header.Set("X-B", "B")
+	req.Header.Set("X-C", "C")
 	go func() {
 		pw.Write([]byte("hello, extended connect"))
 		pw.Close()
@@ -5892,7 +5895,7 @@ func TestExtendedConnectClientWithServerSupport(t *testing.T) {
 }
 
 func TestExtendedConnectClientWithoutServerSupport(t *testing.T) {
-	disableExtendedConnectProtocol = true
+	setForTest(t, &disableExtendedConnectProtocol, true)
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		io.Copy(w, r.Body)
 	})
@@ -5905,6 +5908,9 @@ func TestExtendedConnectClientWithoutServerSupport(t *testing.T) {
 	pwDone := make(chan struct{})
 	req, _ := http.NewRequest("CONNECT", ts.URL, pr)
 	req.Header.Set(":protocol", "extended-connect")
+	req.Header.Set("X-A", "A")
+	req.Header.Set("X-B", "B")
+	req.Header.Set("X-C", "C")
 	go func() {
 		pw.Write([]byte("hello, extended connect"))
 		pw.Close()
